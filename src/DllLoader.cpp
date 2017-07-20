@@ -1,53 +1,59 @@
 #include <Windows.h>
-#include <string>
-#include <vector>
 #include <memory>
+#include <vector>
+#include <string>
+#include <codecvt>
 #include <iostream>
 
+namespace {
 void printUsage()
 {
-    const std::string msg =
-        "DllLoader -> load dll(s)\n"
-        "Usage DllLoader [OPTIONS] DllName func1 func2 ...\n"
-        " -h, --help       Display this message\n";
-    std::cout << msg << std::endl;
+    const std::wstring msg =
+        L"DllLoader -> load dll(s)\n"
+        L"Usage DllLoader [OPTIONS] DllName func1 func2 ...\n"
+        L" -h, --help       Display this message";
+    std::wcout << msg << std::endl;
 }
 
-struct DllConfig {
-    std::string name;
-    std::vector<std::string> functions;
+namespace str {
+std::string ws2s(std::wstring wout)
+{
+    typedef std::codecvt_utf8<wchar_t> convert_type;
+    std::wstring_convert<convert_type, wchar_t> converter;
+    return converter.to_bytes(wout);
+}
+
+std::wstring s2ws(std::string str)
+{
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    return converter.from_bytes(str);
+}
+}
+
+struct DllConfig
+{
+    std::wstring name;
+    std::vector<std::wstring> functions;
 };
 
-struct Config {
-    bool help;
+struct Config
+{
+    bool help = false;
     DllConfig dll;
 
-    /// Load default values
-    Config()
+    void load(const std::vector<std::wstring> &args)
     {
-        help = false;
-    }
-
-    void load(INT argc, LPSTR argv[])
-    {
-        const std::string CMD_HELP_SHORT = "-h";
-        const std::string CMD_HELP_LONG = "--help";
-
-        if (argc < 2) {
+        if (args.size() < 2) {
             printUsage();
-            throw std::invalid_argument("Invalid number of argumanets: '" + std::to_string(argc) + "'. Should be 2 or more");
+            throw std::invalid_argument("Invalid number of argumanets: '" + std::to_string(args.size()) + "'. Should be 2 or more");
         }
 
-        /// Prepare data
-        std::vector<std::string> commands;
-        for (int i = 1; i < argc; ++i)
-            commands.push_back(argv[i]);
+        dll.name = args[1]; ///> name of dll to load
 
-        dll.name = commands.at(0); ///> name of dll to load
-
+        const std::wstring CMD_HELP_SHORT = L"-h";
+        const std::wstring CMD_HELP_LONG = L"--help";
         /// Set user provided values
-        for (unsigned i = 1; i < commands.size(); ++i) {
-            std::string const & command = commands.at(i);
+        for (const std::wstring &command : args) {
             if (command == CMD_HELP_SHORT || command == CMD_HELP_LONG) {
                 help = true;
             } else {
@@ -57,27 +63,25 @@ struct Config {
     }
 };
 
-void loadDll(Config const & cfg)
+void loadDll(const Config &cfg)
 {
-    HMODULE hDll = LoadLibraryA(cfg.dll.name.c_str());
-    if (hDll == NULL)
-        throw std::runtime_error("Could not open dll '" + cfg.dll.name + "'");
-    
+    HMODULE hDll = LoadLibraryW(cfg.dll.name.c_str());
+    if (!hDll)
+        throw std::runtime_error("Could not open dll '" + str::ws2s(cfg.dll.name) + "'");
+
     std::vector<FARPROC> functions;
     for (auto const f : cfg.dll.functions) {
-        FARPROC tempFunc = GetProcAddress(hDll, f.c_str());
-        if (tempFunc == NULL)
-            throw std::runtime_error("Could not load function '" + f + "' from '" + cfg.dll.name + "'");
+        FARPROC tempFunc = GetProcAddress(hDll, str::ws2s(f).c_str());
+        if (!tempFunc)
+            throw std::runtime_error("Could not load function '" + str::ws2s(f) + "' from '" + str::ws2s(cfg.dll.name) + "'");
         functions.push_back(tempFunc);
     }
 }
 
-int mainImp(INT argc, LPSTR argv[])
+int mainImpl(const std::vector<std::wstring> &args)
 {
-    
-
     Config cfg;
-    cfg.load(argc, argv);
+    cfg.load(args);
 
     if (cfg.help) {
         printUsage();
@@ -87,17 +91,18 @@ int mainImp(INT argc, LPSTR argv[])
 
     return EXIT_SUCCESS;
 }
+}
 
-int main(INT argc, LPSTR argv[])
+int wmain(int argc, wchar_t *argv[])
 {
-    int exitCode;
+    int exitCode = EXIT_FAILURE;
     try {
-        exitCode = mainImp(argc, argv);
+        exitCode = mainImpl({argv, argv + argc});
     } catch (std::exception const & e) {
-        std::cout << "ERR [DllLoader]::main Unhandled exception -> " << e.what() << std::endl;
+        std::wcout << L"ERR [DllLoader]::main Unhandled exception -> " << e.what() << std::endl;
         exitCode = EXIT_FAILURE;
     } catch (...) {
-        std::cout << "ERR [DllLoader]::main Unrecognized unhandled exception" << std::endl;
+        std::wcout << L"ERR [DllLoader]::main Unrecognized unhandled exception" << std::endl;
         exitCode = EXIT_FAILURE;
     }
 
