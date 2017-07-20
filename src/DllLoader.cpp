@@ -16,14 +16,14 @@ void printUsage()
 }
 
 namespace str {
-std::string ws2s(std::wstring wout)
+std::string ws2s(const std::wstring &wout)
 {
     typedef std::codecvt_utf8<wchar_t> convert_type;
     std::wstring_convert<convert_type, wchar_t> converter;
     return converter.to_bytes(wout);
 }
 
-std::wstring s2ws(std::string str)
+std::wstring s2ws(const std::string &str)
 {
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     return converter.from_bytes(str);
